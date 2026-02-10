@@ -1,61 +1,44 @@
-import { createContext, useContext, useEffect, useReducer } from 'react';
-import type { PlannerState, Task } from '../types';
-import { seedTasks } from '../data/seed';
-import { nanoid } from 'nanoid';
+import { createContext, useContext, useEffect, useMemo, useReducer, useState } from 'react';
+import type { Filters, PlannerState, Task } from '../types';
+import { api } from '../api/client';
 
-const STORAGE_KEY = 'student-planner-state-v1';
-
-const defaultState: PlannerState = {
-  tasks: seedTasks,
-  courses: Array.from(new Set(seedTasks.map((task) => task.course).filter(Boolean))) as string[],
-  filters: {
-    course: 'all',
-    kind: 'all',
-    priority: 'all',
-    search: '',
-  },
+const defaultFilters: Filters = {
+  course: 'all',
+  kind: 'all',
+  priority: 'all',
+  search: '',
 };
 
-type Action =
-  | { type: 'ADD_TASK'; payload: Omit<Task, 'id' | 'createdAt'> }
-  | { type: 'UPDATE_TASK'; payload: Task }
-  | { type: 'DELETE_TASK'; payload: { id: string } }
-  | { type: 'TOGGLE_STATUS'; payload: { id: string } }
-  | { type: 'SET_FILTERS'; payload: PlannerState['filters'] }
-  | { type: 'IMPORT_STATE'; payload: PlannerState }
-  | { type: 'RESET_STATE' };
+const defaultState: PlannerState = {
+  tasks: [],
+  courses: [],
+  filters: defaultFilters,
+};
 
-function plannerReducer(state: PlannerState, action: Action): PlannerState {
+const deriveCourses = (tasks: Task[]) =>
+  Array.from(new Set(tasks.map((task) => task.course).filter(Boolean))) as string[];
+
+type Action =
+  | { type: 'SET_TASKS'; payload: Task[] }
+  | { type: 'UPSERT_TASK'; payload: Task }
+  | { type: 'REMOVE_TASK'; payload: string }
+  | { type: 'SET_FILTERS'; payload: Filters };
+
+function reducer(state: PlannerState, action: Action): PlannerState {
   switch (action.type) {
-    case 'IMPORT_STATE':
-      return action.payload;
-    case 'RESET_STATE':
-      return defaultState;
-    case 'ADD_TASK': {
-      const newTask: Task = { ...action.payload, id: nanoid(), createdAt: new Date().toISOString() };
-      const courses = newTask.course && !state.courses.includes(newTask.course)
-        ? [...state.courses, newTask.course]
-        : state.courses;
-      return { ...state, tasks: [newTask, ...state.tasks], courses };
+    case 'SET_TASKS': {
+      return { ...state, tasks: action.payload, courses: deriveCourses(action.payload) };
     }
-    case 'UPDATE_TASK':
-      return { ...state, tasks: state.tasks.map((task) => (task.id === action.payload.id ? action.payload : task)) };
-    case 'DELETE_TASK':
-      return { ...state, tasks: state.tasks.filter((task) => task.id !== action.payload.id) };
-    case 'TOGGLE_STATUS':
-      return {
-        ...state,
-        tasks: state.tasks.map((task) =>
-          task.id === action.payload.id
-            ? {
-                ...task,
-                status: task.status === 'done' ? 'pending' : 'done',
-                completedAt: task.status === 'done' ? undefined : new Date().toISOString(),
-                streak: task.kind === 'habit' && task.status !== 'done' ? (task.streak ?? 0) + 1 : task.streak,
-              }
-            : task,
-        ),
-      };
+    case 'UPSERT_TASK': {
+      const tasks = state.tasks.some((t) => t.id === action.payload.id)
+        ? state.tasks.map((task) => (task.id === action.payload.id ? action.payload : task))
+        : [action.payload, ...state.tasks];
+      return { ...state, tasks, courses: deriveCourses(tasks) };
+    }
+    case 'REMOVE_TASK': {
+      const tasks = state.tasks.filter((task) => task.id !== action.payload);
+      return { ...state, tasks, courses: deriveCourses(tasks) };
+    }
     case 'SET_FILTERS':
       return { ...state, filters: action.payload };
     default:
@@ -63,30 +46,70 @@ function plannerReducer(state: PlannerState, action: Action): PlannerState {
   }
 }
 
-const PlannerContext = createContext<{
+interface PlannerContextValue {
   state: PlannerState;
-  dispatch: React.Dispatch<Action>;
-}>({ state: defaultState, dispatch: () => undefined });
+  loading: boolean;
+  setFilters: (filters: Filters) => void;
+  refresh: () => Promise<void>;
+  addTask: (task: Omit<Task, 'id' | 'createdAt' | 'completedAt'>) => Promise<void>;
+  updateTask: (id: string, data: Partial<Task>) => Promise<void>;
+  deleteTask: (id: string) => Promise<void>;
+  toggleStatus: (id: string, status: Task['status']) => Promise<void>;
+}
+
+const PlannerContext = createContext<PlannerContextValue | null>(null);
 
 export const PlannerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [state, dispatch] = useReducer(plannerReducer, defaultState);
+  const [state, dispatch] = useReducer(reducer, defaultState);
+  const [loading, setLoading] = useState(false);
+
+  const refresh = async () => {
+    setLoading(true);
+    try {
+      const tasks = await api<Task[]>('/api/tasks');
+      dispatch({ type: 'SET_TASKS', payload: tasks });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        dispatch({ type: 'IMPORT_STATE', payload: JSON.parse(stored) as PlannerState });
-      }
-    } catch (err) {
-      console.warn('Failed to hydrate planner state', err);
-    }
+    refresh();
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }, [state]);
+  const setFilters = (filters: Filters) => dispatch({ type: 'SET_FILTERS', payload: filters });
 
-  return <PlannerContext.Provider value={{ state, dispatch }}>{children}</PlannerContext.Provider>;
+  const addTask = async (task: Omit<Task, 'id' | 'createdAt' | 'completedAt'>) => {
+    const created = await api<Task>('/api/tasks', {
+      method: 'POST',
+      body: JSON.stringify(task),
+    });
+    dispatch({ type: 'UPSERT_TASK', payload: created });
+  };
+
+  const updateTask = async (id: string, data: Partial<Task>) => {
+    const updated = await api<Task>(`/api/tasks/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+    dispatch({ type: 'UPSERT_TASK', payload: updated });
+  };
+
+  const deleteTask = async (id: string) => {
+    await api<void>(`/api/tasks/${id}`, { method: 'DELETE' });
+    dispatch({ type: 'REMOVE_TASK', payload: id });
+  };
+
+  const toggleStatus = async (id: string, status: Task['status']) => {
+    await updateTask(id, { status });
+  };
+
+  const value = useMemo(
+    () => ({ state, loading, setFilters, refresh, addTask, updateTask, deleteTask, toggleStatus }),
+    [state, loading],
+  );
+
+  return <PlannerContext.Provider value={value}>{children}</PlannerContext.Provider>;
 };
 
 export const usePlanner = () => {

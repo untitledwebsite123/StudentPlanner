@@ -1,73 +1,64 @@
-# React + TypeScript + Vite
+# StudentPlanner
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A full-stack planner for students to manage assignments, exams, labs, habits, and personal tasks with actionable insights. Built with React + TypeScript on the front-end and Express + Prisma on the back-end.
 
-Currently, two official plugins are available:
+## Features
+- Capture rich task metadata (course, type, estimated hours, due date, recurrence, notes, priority).
+- Smart views for Today, Upcoming (next 7 days), and Habits with streak tracking.
+- Calendar strip summarizing workload per day.
+- Analytics sidebar aggregating total/pending hours, completions this week, and course distribution.
+- REST API powered by Express, Prisma, and SQLite (swap for Postgres/MySQL for production).
+- Vitest-powered unit tests for workload computations.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Project Structure
+```
+Projects/StudentPlanner
+├── server/            # Express API + Prisma ORM
+└── (frontend files)   # Vite React client
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Getting Started
+### 1. Backend API
+```bash
+cd server
+cp .env.example .env   # update if needed
+npm install
+npm run prisma:migrate
+npm run dev            # starts http://localhost:4000
 ```
+
+### 2. Frontend
+```bash
+npm install
+npm run dev            # starts Vite dev server
+```
+Ensure `VITE_API_URL` in `.env` points to the API origin (defaults to `http://localhost:4000`).
+
+### Production Build
+```bash
+# Build API
+cd server && npm run build
+
+# Build client
+cd .. && npm run build
+```
+
+## Testing
+```bash
+npm run test
+```
+Runs Vitest unit tests (currently covering workload stats). Extend with component/integration tests as the app grows.
+
+## Deployment Notes
+- Swap Prisma's SQLite datasource for Postgres/MySQL for horizontal scalability.
+- Containerize the API + frontend (`Dockerfile`s) and deploy behind a reverse proxy.
+- Configure CI (GitHub Actions) to lint, test, and build on each PR.
+- Use a managed DB (e.g., Supabase, Neon) and secrets manager for environment variables.
+
+## API Endpoints
+- `GET /api/tasks` – list tasks
+- `POST /api/tasks` – create task
+- `PUT /api/tasks/:id` – update task
+- `DELETE /api/tasks/:id` – delete task
+
+All payloads are validated with Zod to keep the contract strict.

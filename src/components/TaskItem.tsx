@@ -17,17 +17,18 @@ const kindColors: Record<Task['kind'], string> = {
 };
 
 export const TaskItem = ({ task }: Props) => {
-  const { dispatch } = usePlanner();
+  const { deleteTask, toggleStatus } = usePlanner();
   const dueLabel = formatDue(task.dueAt);
+
+  const handleToggle = () => {
+    const nextStatus = task.status === 'done' ? 'pending' : 'done';
+    toggleStatus(task.id, nextStatus);
+  };
 
   return (
     <article className="task-card">
       <div className="task-left">
-        <input
-          type="checkbox"
-          checked={task.status === 'done'}
-          onChange={() => dispatch({ type: 'TOGGLE_STATUS', payload: { id: task.id } })}
-        />
+        <input type="checkbox" checked={task.status === 'done'} onChange={handleToggle} />
         <div>
           <div className="task-heading">
             <span className="task-dot" style={{ backgroundColor: kindColors[task.kind] }} />
@@ -48,7 +49,7 @@ export const TaskItem = ({ task }: Props) => {
         </div>
       </div>
       <div className="task-actions">
-        <button onClick={() => dispatch({ type: 'DELETE_TASK', payload: { id: task.id } })}>Delete</button>
+        <button onClick={() => deleteTask(task.id)}>Delete</button>
       </div>
     </article>
   );

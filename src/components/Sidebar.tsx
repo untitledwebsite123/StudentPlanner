@@ -8,7 +8,7 @@ const smartFilters = [
 ];
 
 export const Sidebar = () => {
-  const { state, dispatch } = usePlanner();
+  const { state, setFilters } = usePlanner();
 
   const counts = useMemo(() => {
     return {
@@ -17,6 +17,8 @@ export const Sidebar = () => {
       habit: state.tasks.filter((task) => task.kind === 'habit').length,
     };
   }, [state.tasks]);
+
+  const handleCourse = (course: string | 'all') => setFilters({ ...state.filters, course });
 
   return (
     <aside className="sidebar">
@@ -33,7 +35,7 @@ export const Sidebar = () => {
         <h2>Courses</h2>
         <button
           className={`sidebar-btn ${state.filters.course === 'all' ? 'active' : ''}`}
-          onClick={() => dispatch({ type: 'SET_FILTERS', payload: { ...state.filters, course: 'all' } })}
+          onClick={() => handleCourse('all')}
         >
           <span>All courses</span>
           <span>{state.tasks.length}</span>
@@ -42,7 +44,7 @@ export const Sidebar = () => {
           <button
             key={course}
             className={`sidebar-btn ${state.filters.course === course ? 'active' : ''}`}
-            onClick={() => dispatch({ type: 'SET_FILTERS', payload: { ...state.filters, course } })}
+            onClick={() => handleCourse(course)}
           >
             <span>{course}</span>
             <span>{state.tasks.filter((task) => task.course === course).length}</span>

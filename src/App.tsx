@@ -8,7 +8,7 @@ import { TaskItem } from './components/TaskItem';
 import { StatsPanel } from './components/StatsPanel';
 
 const MainView = () => {
-  const { state } = usePlanner();
+  const { state, loading } = usePlanner();
   const filtered = state.tasks.filter((task) => {
     const { course, kind, priority, search } = state.filters;
     const matchesCourse = course === 'all' || task.course === course;
@@ -34,6 +34,7 @@ const MainView = () => {
       <Sidebar />
       <main className="main">
         <TaskComposer />
+        {loading && <p className="muted">Syncing with cloud…</p>}
         <CalendarStrip />
         <TaskList title="Today" count={today.length}>
           {today.map((task) => (

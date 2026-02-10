@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { usePlanner } from '../context/PlannerContext';
-import type { Priority, TaskKind } from '../types';
+import type { Priority, Task, TaskKind } from '../types';
 
 const defaultForm = {
   title: '',
@@ -10,34 +10,37 @@ const defaultForm = {
   priority: 'medium' as Priority,
   estimatedHours: '',
   dueAt: '',
-  repeats: 'none',
+  repeats: 'daily' as 'daily' | 'weekly',
   notes: '',
 };
 
 export const TaskComposer = () => {
-  const { dispatch } = usePlanner();
+  const { addTask } = usePlanner();
   const [form, setForm] = useState(defaultForm);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (event: FormEvent) => {
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (!form.title.trim()) return;
-
-    dispatch({
-      type: 'ADD_TASK',
-      payload: {
+    setSubmitting(true);
+    try {
+      const payload: Omit<Task, 'id' | 'createdAt' | 'completedAt'> = {
         title: form.title.trim(),
         course: form.course || undefined,
         kind: form.kind,
         priority: form.priority,
         estimatedHours: form.estimatedHours ? Number(form.estimatedHours) : undefined,
         dueAt: form.dueAt || undefined,
-        repeats: form.kind === 'habit' ? (form.repeats === 'none' ? 'daily' : (form.repeats as any)) : null,
+        repeats: form.kind === 'habit' ? form.repeats : null,
         notes: form.notes || undefined,
         status: 'pending',
-      },
-    });
-
-    setForm(defaultForm);
+        streak: form.kind === 'habit' ? 0 : undefined,
+      };
+      await addTask(payload);
+      setForm(defaultForm);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -75,7 +78,10 @@ export const TaskComposer = () => {
           onChange={(e) => setForm((prev) => ({ ...prev, dueAt: e.target.value }))}
         />
         {form.kind === 'habit' ? (
-          <select value={form.repeats} onChange={(e) => setForm((prev) => ({ ...prev, repeats: e.target.value }))}>
+          <select
+            value={form.repeats}
+            onChange={(e) => setForm((prev) => ({ ...prev, repeats: e.target.value as 'daily' | 'weekly' }))}
+          >
             <option value="daily">Repeats daily</option>
             <option value="weekly">Repeats weekly</option>
           </select>
@@ -95,7 +101,9 @@ export const TaskComposer = () => {
           onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
           rows={3}
         />
-        <button type="submit">Add to planner</button>
+        <button type="submit" disabled={submitting}>
+          {submitting ? 'Adding…' : 'Add to planner'}
+        </button>
       </form>
     </section>
   );
